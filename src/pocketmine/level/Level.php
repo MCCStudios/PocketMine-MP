@@ -2724,7 +2724,7 @@ class Level implements ChunkManager, Metadatable{
 		unset($this->updateEntities[$entity->getId()]);
 	}
 
-	/**
+			/**
 	 * @param Tile $tile
 	 *
 	 * @throws LevelException
@@ -2743,9 +2743,10 @@ class Level implements ChunkManager, Metadatable{
 		if(isset($this->chunks[$hash = Level::chunkHash($chunkX, $chunkZ)])){
 			$this->chunks[$hash]->addTile($tile);
 		}else{
-			throw new \InvalidStateException("Attempted to create tile " . get_class($tile) . " in unloaded chunk $chunkX $chunkZ");
+			$this->loadChunk($chunkX, $chunkZ, true);
+			$this->chunks[$hash]->addTile($tile);
 		}
-
+		
 		$this->tiles[$tile->getId()] = $tile;
 		$this->clearChunkCache($chunkX, $chunkZ);
 	}
