@@ -65,17 +65,9 @@ use pocketmine\command\defaults\VanillaCommand;
 use pocketmine\command\defaults\VersionCommand;
 use pocketmine\command\defaults\WhitelistCommand;
 use pocketmine\command\utils\InvalidCommandSyntaxException;
+use pocketmine\lang\TranslationContainer;
 use pocketmine\Server;
-use function array_map;
-use function array_shift;
-use function count;
-use function explode;
-use function implode;
-use function min;
-use function str_getcsv;
-use function strpos;
-use function strtolower;
-use function trim;
+use pocketmine\utils\TextFormat;
 
 class SimpleCommandMap implements CommandMap{
 
@@ -100,11 +92,9 @@ class SimpleCommandMap implements CommandMap{
 			new DefaultGamemodeCommand("defaultgamemode"),
 			new DeopCommand("deop"),
 			new DifficultyCommand("difficulty"),
-			new DumpMemoryCommand("dumpmemory"),
 			new EffectCommand("effect"),
 			new EnchantCommand("enchant"),
 			new GamemodeCommand("gamemode"),
-			new GarbageCollectorCommand("gc"),
 			new GiveCommand("give"),
 			new HelpCommand("help"),
 			new KickCommand("kick"),
@@ -124,7 +114,6 @@ class SimpleCommandMap implements CommandMap{
 			new SeedCommand("seed"),
 			new SetWorldSpawnCommand("setworldspawn"),
 			new SpawnpointCommand("spawnpoint"),
-			new StatusCommand("status"),
 			new StopCommand("stop"),
 			new TeleportCommand("tp"),
 			new TellCommand("tell"),
@@ -135,6 +124,14 @@ class SimpleCommandMap implements CommandMap{
 			new VersionCommand("version"),
 			new WhitelistCommand("whitelist")
 		]);
+
+		if($this->server->getProperty("debug.commands", false)){
+			$this->registerAll("pocketmine", [
+				new StatusCommand("status"),
+				new GarbageCollectorCommand("gc"),
+				new DumpMemoryCommand("dumpmemory")
+			]);
+		}
 	}
 
 
@@ -247,7 +244,7 @@ class SimpleCommandMap implements CommandMap{
 	}
 
 	public function dispatch(CommandSender $sender, string $commandLine) : bool{
-		$args = array_map("\stripslashes", str_getcsv($commandLine, " "));
+		$args = array_map("stripslashes", str_getcsv($commandLine, " "));
 		$sentCommandLabel = "";
 		$target = $this->matchCommand($sentCommandLabel, $args);
 
@@ -261,9 +258,13 @@ class SimpleCommandMap implements CommandMap{
 			$target->execute($sender, $sentCommandLabel, $args);
 		}catch(InvalidCommandSyntaxException $e){
 			$sender->sendMessage($this->server->getLanguage()->translateString("commands.generic.usage", [$target->getUsage()]));
-		}finally{
-			$target->timings->stopTiming();
+		}catch(\Throwable $e){
+			$sender->sendMessage(new TranslationContainer(TextFormat::RED . "%commands.generic.exception"));
+			$this->server->getLogger()->critical($this->server->getLanguage()->translateString("pocketmine.command.exception", [$commandLine, (string) $target, $e->getMessage()]));
+			$sender->getServer()->getLogger()->logException($e);
 		}
+
+		$target->timings->stopTiming();
 
 		return true;
 	}
