@@ -26,24 +26,21 @@ declare(strict_types=1);
  */
 namespace pocketmine\event;
 
-use function assert;
-use function get_class;
-
 abstract class Event{
 	private const MAX_EVENT_CALL_DEPTH = 50;
 	/** @var int */
 	private static $eventCallDepth = 1;
 
 	/** @var string|null */
-	protected $eventName = null;
+	protected $eventName = \null;
 	/** @var bool */
-	private $isCancelled = false;
+	private $isCancelled = \false;
 
 	/**
 	 * @return string
 	 */
 	final public function getEventName() : string{
-		return $this->eventName ?? get_class($this);
+		return $this->eventName ?? \get_class($this);
 	}
 
 	/**
@@ -53,7 +50,7 @@ abstract class Event{
 	 */
 	public function isCancelled() : bool{
 		if(!($this instanceof Cancellable)){
-			throw new \BadMethodCallException(get_class($this) . " is not Cancellable");
+			throw new \BadMethodCallException("Event is not Cancellable");
 		}
 
 		/** @var Event $this */
@@ -65,9 +62,9 @@ abstract class Event{
 	 *
 	 * @throws \BadMethodCallException
 	 */
-	public function setCancelled(bool $value = true) : void{
+	public function setCancelled(bool $value = \true) : void{
 		if(!($this instanceof Cancellable)){
-			throw new \BadMethodCallException(get_class($this) . " is not Cancellable");
+			throw new \BadMethodCallException("Event is not Cancellable");
 		}
 
 		/** @var Event $this */
@@ -87,16 +84,35 @@ abstract class Event{
 			throw new \RuntimeException("Recursive event call detected (reached max depth of " . self::MAX_EVENT_CALL_DEPTH . " calls)");
 		}
 
-		$handlerList = HandlerList::getHandlerListFor(get_class($this));
-		assert($handlerList !== null, "Called event should have a valid HandlerList");
+		$handlerList = HandlerList::getHandlerListFor(\get_class($this));
+		\assert($handlerList !== \null, "Called event should have a valid HandlerList");
 
 		++self::$eventCallDepth;
 		try{
 			foreach(EventPriority::ALL as $priority){
 				$currentList = $handlerList;
-				while($currentList !== null){
+				while($currentList !== \null){
 					foreach($currentList->getListenersByPriority($priority) as $registration){
+											try{
+
+
+ 
 						$registration->callEvent($this);
+
+
+ 
+					}catch(\Throwable $e){
+
+
+
+
+
+ 
+						echo($e->getMessage());
+
+
+ 
+					}
 					}
 
 					$currentList = $currentList->getParent();
