@@ -124,6 +124,7 @@ use function file_put_contents;
 use function filemtime;
 use function floor;
 use function function_exists;
+use function gc_collect_cycles;
 use function get_class;
 use function getmypid;
 use function getopt;
@@ -1172,7 +1173,7 @@ class Server{
 				$distance = $X ** 2 + $Z ** 2;
 				$chunkX = $X + $centerX;
 				$chunkZ = $Z + $centerZ;
-				$index = Level::chunkHash($chunkX, $chunkZ);
+				$index = ((($chunkX) & 0xFFFFFFFF) << 32) | (( $chunkZ) & 0xFFFFFFFF);
 				$order[$index] = $distance;
 			}
 		}
@@ -1180,7 +1181,7 @@ class Server{
 		asort($order);
 
 		foreach($order as $index => $distance){
-			Level::getXZ($index, $chunkX, $chunkZ);
+			 $chunkX = ($index >> 32);  $chunkZ = ($index & 0xFFFFFFFF) << 32 >> 32;
 			$level->populateChunk($chunkX, $chunkZ, true);
 		}
 
@@ -1931,9 +1932,6 @@ class Server{
 	 * @param bool         $immediate
 	 */
 	public function batchPackets(array $players, array $packets, bool $forceSync = false, bool $immediate = false){
-		if(empty($packets)){
-			throw new \InvalidArgumentException("Cannot send empty batch");
-		}
 		Timings::$playerNetworkTimer->startTiming();
 
 		$targets = array_filter($players, function(Player $player) : bool{ return $player->isConnected(); });
@@ -2147,6 +2145,9 @@ class Server{
 					$this->network->unregisterInterface($interface);
 				}
 			}
+
+			$this->getLogger()->debug("Collecting cycles");
+			gc_collect_cycles();
 		}catch(\Throwable $e){
 			$this->logger->logException($e);
 			$this->logger->emergency("Crashed while crashing, killing process");
