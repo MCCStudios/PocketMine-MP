@@ -68,6 +68,16 @@ use pocketmine\command\utils\InvalidCommandSyntaxException;
 use pocketmine\lang\TranslationContainer;
 use pocketmine\Server;
 use pocketmine\utils\TextFormat;
+use function array_shift;
+use function count;
+use function explode;
+use function implode;
+use function min;
+use function preg_match_all;
+use function stripslashes;
+use function strpos;
+use function strtolower;
+use function trim;
 
 class SimpleCommandMap implements CommandMap{
 
@@ -244,7 +254,17 @@ class SimpleCommandMap implements CommandMap{
 	}
 
 	public function dispatch(CommandSender $sender, string $commandLine) : bool{
-		$args = array_map("stripslashes", str_getcsv($commandLine, " "));
+
+		$args = [];
+		preg_match_all('/"((?:\\\\.|[^\\\\"])*)"|(\S+)/u', $commandLine, $matches);
+		foreach($matches[0] as $k => $_){
+			for($i = 1; $i <= 2; ++$i){
+				if($matches[$i][$k] !== ""){
+					$args[$k] = stripslashes($matches[$i][$k]);
+					break;
+				}
+			}
+		}
 		$sentCommandLabel = "";
 		$target = $this->matchCommand($sentCommandLabel, $args);
 

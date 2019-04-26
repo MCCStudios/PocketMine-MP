@@ -23,7 +23,8 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
 
-use function ord;
+use pocketmine\utils\Binary;
+use pocketmine\utils\BinaryDataException;
 
 class PacketPool{
 	/** @var \SplFixedArray<DataPacket> */
@@ -32,7 +33,6 @@ class PacketPool{
 	public static function init(){
 		static::$pool = new \SplFixedArray(256);
 
-		//Normal packets
 		static::registerPacket(new LoginPacket());
 		static::registerPacket(new PlayStatusPacket());
 		static::registerPacket(new ServerToClientHandshakePacket());
@@ -126,7 +126,7 @@ class PacketPool{
 		static::registerPacket(new PurchaseReceiptPacket());
 		static::registerPacket(new PlayerSkinPacket());
 		static::registerPacket(new SubClientLoginPacket());
-		static::registerPacket(new WSConnectPacket());
+		static::registerPacket(new AutomationClientConnectPacket());
 		static::registerPacket(new SetLastHurtByPacket());
 		static::registerPacket(new BookEditPacket());
 		static::registerPacket(new NpcRequestPacket());
@@ -154,8 +154,10 @@ class PacketPool{
 		static::registerPacket(new NetworkChunkPublisherUpdatePacket());
 		static::registerPacket(new BiomeDefinitionListPacket());
 		static::registerPacket(new LevelSoundEventPacket());
-
-		static::registerPacket(new BatchPacket());
+		static::registerPacket(new LecternUpdatePacket());
+		static::registerPacket(new VideoStreamConnectPacket());
+		static::registerPacket(new MapCreateLockedCopyPacket());
+		static::registerPacket(new OnScreenTextureAnimationPacket());
 	}
 
 	/**
@@ -178,12 +180,13 @@ class PacketPool{
 	 * @param string $buffer
 	 *
 	 * @return DataPacket
+	 * @throws BinaryDataException
 	 */
 	public static function getPacket(string $buffer) : DataPacket{
-		$pk = static::getPacketById(ord($buffer{0}));
-		$pk->setBuffer($buffer);
+		$offset = 0;
+		$pk = static::getPacketById(Binary::readUnsignedVarInt($buffer, $offset));
+		$pk->setBuffer($buffer, $offset);
 
 		return $pk;
 	}
-
 }
