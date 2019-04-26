@@ -65,7 +65,9 @@ use pocketmine\command\defaults\VanillaCommand;
 use pocketmine\command\defaults\VersionCommand;
 use pocketmine\command\defaults\WhitelistCommand;
 use pocketmine\command\utils\InvalidCommandSyntaxException;
+use pocketmine\lang\TranslationContainer;
 use pocketmine\Server;
+use pocketmine\utils\TextFormat;
 use function array_shift;
 use function count;
 use function explode;
@@ -100,11 +102,9 @@ class SimpleCommandMap implements CommandMap{
 			new DefaultGamemodeCommand("defaultgamemode"),
 			new DeopCommand("deop"),
 			new DifficultyCommand("difficulty"),
-			new DumpMemoryCommand("dumpmemory"),
 			new EffectCommand("effect"),
 			new EnchantCommand("enchant"),
 			new GamemodeCommand("gamemode"),
-			new GarbageCollectorCommand("gc"),
 			new GiveCommand("give"),
 			new HelpCommand("help"),
 			new KickCommand("kick"),
@@ -124,7 +124,6 @@ class SimpleCommandMap implements CommandMap{
 			new SeedCommand("seed"),
 			new SetWorldSpawnCommand("setworldspawn"),
 			new SpawnpointCommand("spawnpoint"),
-			new StatusCommand("status"),
 			new StopCommand("stop"),
 			new TeleportCommand("tp"),
 			new TellCommand("tell"),
@@ -135,6 +134,14 @@ class SimpleCommandMap implements CommandMap{
 			new VersionCommand("version"),
 			new WhitelistCommand("whitelist")
 		]);
+
+		if($this->server->getProperty("debug.commands", false)){
+			$this->registerAll("pocketmine", [
+				new StatusCommand("status"),
+				new GarbageCollectorCommand("gc"),
+				new DumpMemoryCommand("dumpmemory")
+			]);
+		}
 	}
 
 
@@ -247,6 +254,7 @@ class SimpleCommandMap implements CommandMap{
 	}
 
 	public function dispatch(CommandSender $sender, string $commandLine) : bool{
+
 		$args = [];
 		preg_match_all('/"((?:\\\\.|[^\\\\"])*)"|(\S+)/u', $commandLine, $matches);
 		foreach($matches[0] as $k => $_){
@@ -270,9 +278,13 @@ class SimpleCommandMap implements CommandMap{
 			$target->execute($sender, $sentCommandLabel, $args);
 		}catch(InvalidCommandSyntaxException $e){
 			$sender->sendMessage($this->server->getLanguage()->translateString("commands.generic.usage", [$target->getUsage()]));
-		}finally{
-			$target->timings->stopTiming();
+		}catch(\Throwable $e){
+			$sender->sendMessage(new TranslationContainer(TextFormat::RED . "%commands.generic.exception"));
+			$this->server->getLogger()->critical($this->server->getLanguage()->translateString("pocketmine.command.exception", [$commandLine, (string) $target, $e->getMessage()]));
+			$sender->getServer()->getLogger()->logException($e);
 		}
+
+		$target->timings->stopTiming();
 
 		return true;
 	}

@@ -1922,9 +1922,10 @@ class Server{
 	 * @param bool         $immediate
 	 */
 	public function batchPackets(array $players, array $packets, bool $forceSync = false, bool $immediate = false){
-		if(empty($packets)){
+/*		if(empty($packets)){
 			throw new \InvalidArgumentException("Cannot send empty batch");
 		}
+*/
 		Timings::$playerNetworkTimer->startTiming();
 
 		$targets = array_filter($players, function(Player $player) : bool{ return $player->isConnected(); });
