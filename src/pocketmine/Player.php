@@ -104,6 +104,7 @@ use pocketmine\network\mcpe\protocol\AnimatePacket;
 use pocketmine\network\mcpe\protocol\AvailableCommandsPacket;
 use pocketmine\network\mcpe\protocol\AvailableEntityIdentifiersPacket;
 use pocketmine\network\mcpe\protocol\BatchPacket;
+use pocketmine\network\mcpe\protocol\BiomeDefinitionListPacket;
 use pocketmine\network\mcpe\protocol\BlockEntityDataPacket;
 use pocketmine\network\mcpe\protocol\BlockPickRequestPacket;
 use pocketmine\network\mcpe\protocol\BookEditPacket;
@@ -720,7 +721,8 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 			}
 
 			$data = new CommandData();
-			$data->commandName = $command->getName();
+			//TODO: commands containing uppercase letters in the name crash 1.9.0 client
+			$data->commandName = strtolower($command->getName());
 			$data->commandDescription = $this->server->getLanguage()->translateString($command->getDescription());
 			$data->flags = 0;
 			$data->permission = 0;
@@ -2099,6 +2101,7 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 		/** @var float[] $pos */
 		$pos = $this->namedtag->getListTag("Pos")->getAllValues();
 		$this->level->registerChunkLoader($this, ((int) floor($pos[0])) >> 4, ((int) floor($pos[2])) >> 4, true);
+		$this->usedChunks[Level::chunkHash(((int) floor($pos[0])) >> 4, ((int) floor($pos[2])) >> 4)] = false;
 
 		parent::__construct($this->level, $this->namedtag);
 		$ev = new PlayerLoginEvent($this, "Plugin reason");
@@ -2146,6 +2149,7 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 		$this->dataPacket($pk);
 
 		$this->sendDataPacket(new AvailableEntityIdentifiersPacket());
+		$this->sendDataPacket(new BiomeDefinitionListPacket());
 
 		$this->level->sendTime($this);
 
@@ -2982,7 +2986,8 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 		$t = $this->level->getTile($pos);
 		if($t instanceof Spawnable){
 			$nbt = new NetworkLittleEndianNBTStream();
-			$compound = $nbt->read($packet->namedtag);
+			$_ = 0;
+			$compound = $nbt->read($packet->namedtag, false, $_, 512);
 
 			if(!($compound instanceof CompoundTag)){
 				throw new \InvalidArgumentException("Expected " . CompoundTag::class . " in block entity NBT, got " . (is_object($compound) ? get_class($compound) : gettype($compound)));
@@ -3626,13 +3631,17 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 			}
 
 			if($this->inventory !== null){
-				$this->inventory->setHeldItemIndex(0, false); //This is already handled when sending contents, don't send it twice
+				$this->inventory->setHeldItemIndex(0);
 				$this->inventory->clearAll();
 			}
 			if($this->armorInventory !== null){
 				$this->armorInventory->clearAll();
 			}
 		}
+
+		//TODO: allow this number to be manipulated during PlayerDeathEvent
+		$this->level->dropExperience($this, $this->getXpDropAmount());
+		$this->setXpAndProgress(0, 0);
 
 		if($ev->getDeathMessage() != ""){
 			$this->server->broadcast($ev->getDeathMessage(), Server::BROADCAST_CHANNEL_USERS);
@@ -3903,8 +3912,8 @@ class Player extends Human implements CommandSender, ChunkLoader, IPlayer{
 			throw new \InvalidArgumentException("Cannot remove fixed window $id (" . get_class($inventory) . ") from " . $this->getName());
 		}
 
-		$inventory->close($this);
 		if($id !== null){
+			$inventory->close($this);
 			unset($this->windows[$hash], $this->windowIndex[$id], $this->permanentWindows[$id]);
 		}
 	}

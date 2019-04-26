@@ -36,10 +36,7 @@ namespace pocketmine {
 	use pocketmine\utils\VersionString;
 	use pocketmine\wizard\SetupWizard;
 
-	const NAME = "PocketMine-MP";
-	const BASE_VERSION = "3.6.2";
-	const IS_DEVELOPMENT_BUILD = true;
-	const BUILD_NUMBER = 0;
+	require_once __DIR__ . '/VersionInfo.php';
 
 	const MIN_PHP_VERSION = "7.2.0";
 
@@ -177,7 +174,6 @@ namespace pocketmine {
 	ini_set("default_charset", "utf-8");
 
 	ini_set("memory_limit", '-1');
-	define('pocketmine\START_TIME', microtime(true));
 
 	define('pocketmine\RESOURCE_PATH', \pocketmine\PATH . 'src' . DIRECTORY_SEPARATOR . 'pocketmine' . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR);
 
@@ -188,6 +184,14 @@ namespace pocketmine {
 
 	if(!file_exists(\pocketmine\DATA)){
 		mkdir(\pocketmine\DATA, 0777, true);
+	}
+
+	define('pocketmine\LOCK_FILE_PATH', \pocketmine\DATA . 'server.lock');
+	define('pocketmine\LOCK_FILE', fopen(\pocketmine\LOCK_FILE_PATH, "cb"));
+	if(!flock(\pocketmine\LOCK_FILE, LOCK_EX | LOCK_NB)){
+		critical_error("Another " . \pocketmine\NAME . " instance is already using this folder (" . realpath(\pocketmine\DATA) . ").");
+		critical_error("Please stop the other server first before running a new one.");
+		exit(1);
 	}
 
 	//Logger has a dependency on timezone
@@ -203,6 +207,9 @@ namespace pocketmine {
 
 	if(extension_loaded("xdebug")){
 		$logger->warning(PHP_EOL . PHP_EOL . PHP_EOL . "\tYou are running " . \pocketmine\NAME . " with xdebug enabled. This has a major impact on performance." . PHP_EOL . PHP_EOL);
+	}
+	if(!extension_loaded("pocketmine_chunkutils")){
+		$logger->warning("ChunkUtils extension is missing. Anvil-format worlds will experience degraded performance.");
 	}
 
 	if(\Phar::running(true) === ""){
@@ -245,6 +252,8 @@ namespace pocketmine {
 			}
 		}
 
+		//TODO: move this to a Server field
+		define('pocketmine\START_TIME', microtime(true));
 		ThreadManager::init();
 		new Server($autoloader, $logger, \pocketmine\DATA, \pocketmine\PLUGIN_PATH);
 

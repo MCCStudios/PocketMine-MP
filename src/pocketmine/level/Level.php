@@ -78,6 +78,7 @@ use pocketmine\network\mcpe\protocol\LevelEventPacket;
 use pocketmine\network\mcpe\protocol\LevelSoundEventPacket;
 use pocketmine\network\mcpe\protocol\SetDifficultyPacket;
 use pocketmine\network\mcpe\protocol\SetTimePacket;
+use pocketmine\network\mcpe\protocol\types\RuntimeBlockMapping;
 use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\Player;
 use pocketmine\plugin\Plugin;
@@ -262,10 +263,11 @@ class Level implements ChunkManager, Metadatable{
 	public $timings;
 
 	/** @var int */
-	private $tickRate;
-	/** @var int */
 	public $tickRateTime = 0;
-	/** @var int */
+	/**
+	 * @deprecated
+	 * @var int
+	 */
 	public $tickRateCounter = 0;
 
 	/** @var bool */
@@ -381,7 +383,7 @@ class Level implements ChunkManager, Metadatable{
 		$this->worldHeight = $this->provider->getWorldHeight();
 
 		$this->server->getLogger()->info($this->server->getLanguage()->translateString("pocketmine.level.preparing", [$this->displayName]));
-		$this->generator = GeneratorManager::getGenerator($this->provider->getGenerator());
+		$this->generator = GeneratorManager::getGenerator($this->provider->getGenerator(), true);
 		//TODO: validate generator options
 
 		$this->folderName = $name;
@@ -411,19 +413,26 @@ class Level implements ChunkManager, Metadatable{
 		$this->timings = new LevelTimings($this);
 		$this->temporalPosition = new Position(0, 0, 0, $this);
 		$this->temporalVector = new Vector3(0, 0, 0);
-		$this->tickRate = 1;
 	}
 
+	/**
+	 * @deprecated
+	 * @return int
+	 */
 	public function getTickRate() : int{
-		return $this->tickRate;
+		return 1;
 	}
 
 	public function getTickRateTime() : float{
 		return $this->tickRateTime;
 	}
 
+	/**
+	 * @deprecated does nothing
+	 * @param int $tickRate
+	 */
 	public function setTickRate(int $tickRate){
-		$this->tickRate = $tickRate;
+
 	}
 
 	public function registerGeneratorToWorker(int $worker) : void{
@@ -466,7 +475,7 @@ class Level implements ChunkManager, Metadatable{
 
 	public function close(){
 		if($this->closed){
-			throw new \InvalidStateException("Tried to close a level which is already closed");
+			throw new \InvalidStateException("Tried to close a world which is already closed");
 		}
 
 		foreach($this->chunks as $chunk){
@@ -580,7 +589,7 @@ class Level implements ChunkManager, Metadatable{
 	 */
 	public function unload(bool $force = false) : bool{
 		if($this->doingTick and !$force){
-			throw new \InvalidStateException("Cannot unload a level during level tick");
+			throw new \InvalidStateException("Cannot unload a world during world tick");
 		}
 
 		$ev = new LevelUnloadEvent($this);
@@ -599,7 +608,7 @@ class Level implements ChunkManager, Metadatable{
 		$defaultLevel = $this->server->getDefaultLevel();
 		foreach($this->getPlayers() as $player){
 			if($this === $defaultLevel or $defaultLevel === null){
-				$player->close($player->getLeaveMessage(), "Forced default level unload");
+				$player->close($player->getLeaveMessage(), "Forced default world unload");
 			}elseif($defaultLevel instanceof Level){
 				$player->teleport($this->server->getDefaultLevel()->getSafeSpawn());
 			}
@@ -777,7 +786,7 @@ class Level implements ChunkManager, Metadatable{
 	 */
 	public function doTick(int $currentTick){
 		if($this->closed){
-			throw new \InvalidStateException("Attempted to tick a Level which has been closed");
+			throw new \InvalidStateException("Attempted to tick a world which has been closed");
 		}
 
 		$this->timings->doTick->startTiming();
@@ -974,7 +983,7 @@ class Level implements ChunkManager, Metadatable{
 					$pk->blockRuntimeId = $b->getRuntimeId();
 				}else{
 					$fullBlock = $this->getFullBlock($b->x, $b->y, $b->z);
-					$pk->blockRuntimeId = BlockFactory::toStaticRuntimeId($fullBlock >> 4, $fullBlock & 0xf);
+					$pk->blockRuntimeId = RuntimeBlockMapping::toStaticRuntimeId($fullBlock >> 4, $fullBlock & 0xf);
 				}
 
 				$pk->flags = $first ? $flags : UpdateBlockPacket::FLAG_NONE;
@@ -996,7 +1005,7 @@ class Level implements ChunkManager, Metadatable{
 					$pk->blockRuntimeId = $b->getRuntimeId();
 				}else{
 					$fullBlock = $this->getFullBlock($b->x, $b->y, $b->z);
-					$pk->blockRuntimeId = BlockFactory::toStaticRuntimeId($fullBlock >> 4, $fullBlock & 0xf);
+					$pk->blockRuntimeId = RuntimeBlockMapping::toStaticRuntimeId($fullBlock >> 4, $fullBlock & 0xf);
 				}
 
 				$pk->flags = $flags;
@@ -1149,11 +1158,16 @@ class Level implements ChunkManager, Metadatable{
 	}
 
 	public function saveChunks(){
-		foreach($this->chunks as $chunk){
-			if(($chunk->hasChanged() or count($chunk->getTiles()) > 0 or count($chunk->getSavableEntities()) > 0) and $chunk->isGenerated()){
-				$this->provider->saveChunk($chunk);
-				$chunk->setChanged(false);
+		$this->timings->syncChunkSaveTimer->startTiming();
+		try{
+			foreach($this->chunks as $chunk){
+				if(($chunk->hasChanged() or count($chunk->getTiles()) > 0 or count($chunk->getSavableEntities()) > 0) and $chunk->isGenerated()){
+					$this->provider->saveChunk($chunk);
+					$chunk->setChanged(false);
+				}
 			}
+		}finally{
+			$this->timings->syncChunkSaveTimer->stopTiming();
 		}
 	}
 
@@ -2691,10 +2705,10 @@ class Level implements ChunkManager, Metadatable{
 	 */
 	public function addEntity(Entity $entity){
 		if($entity->isClosed()){
-			throw new \InvalidArgumentException("Attempted to add a garbage closed Entity to Level");
+			throw new \InvalidArgumentException("Attempted to add a garbage closed Entity to world");
 		}
 		if($entity->getLevel() !== $this){
-			throw new LevelException("Invalid Entity level");
+			throw new LevelException("Invalid Entity world");
 		}
 
 		if($entity instanceof Player){
@@ -2712,7 +2726,7 @@ class Level implements ChunkManager, Metadatable{
 	 */
 	public function removeEntity(Entity $entity){
 		if($entity->getLevel() !== $this){
-			throw new LevelException("Invalid Entity level");
+			throw new LevelException("Invalid Entity world");
 		}
 
 		if($entity instanceof Player){
@@ -2724,17 +2738,17 @@ class Level implements ChunkManager, Metadatable{
 		unset($this->updateEntities[$entity->getId()]);
 	}
 
-	/**
+			/**
 	 * @param Tile $tile
 	 *
 	 * @throws LevelException
 	 */
 	public function addTile(Tile $tile){
 		if($tile->isClosed()){
-			throw new \InvalidArgumentException("Attempted to add a garbage closed Tile to Level");
+			throw new \InvalidArgumentException("Attempted to add a garbage closed Tile to world");
 		}
 		if($tile->getLevel() !== $this){
-			throw new LevelException("Invalid Tile level");
+			throw new LevelException("Invalid Tile world");
 		}
 
 		$chunkX = $tile->getFloorX() >> 4;
@@ -2743,9 +2757,10 @@ class Level implements ChunkManager, Metadatable{
 		if(isset($this->chunks[$hash = Level::chunkHash($chunkX, $chunkZ)])){
 			$this->chunks[$hash]->addTile($tile);
 		}else{
-			throw new \InvalidStateException("Attempted to create tile " . get_class($tile) . " in unloaded chunk $chunkX $chunkZ");
+			$this->loadChunk($chunkX, $chunkZ, true);
+			$this->chunks[$hash]->addTile($tile);
 		}
-
+		
 		$this->tiles[$tile->getId()] = $tile;
 		$this->clearChunkCache($chunkX, $chunkZ);
 	}
@@ -2757,7 +2772,7 @@ class Level implements ChunkManager, Metadatable{
 	 */
 	public function removeTile(Tile $tile){
 		if($tile->getLevel() !== $this){
-			throw new LevelException("Invalid Tile level");
+			throw new LevelException("Invalid Tile world");
 		}
 
 		unset($this->tiles[$tile->getId()], $this->updateTiles[$tile->getId()]);
@@ -2893,7 +2908,12 @@ class Level implements ChunkManager, Metadatable{
 
 			if($trySave and $this->getAutoSave() and $chunk->isGenerated()){
 				if($chunk->hasChanged() or count($chunk->getTiles()) > 0 or count($chunk->getSavableEntities()) > 0){
-					$this->provider->saveChunk($chunk);
+					$this->timings->syncChunkSaveTimer->startTiming();
+					try{
+						$this->provider->saveChunk($chunk);
+					}finally{
+						$this->timings->syncChunkSaveTimer->stopTiming();
+					}
 				}
 			}
 
